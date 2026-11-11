@@ -62,8 +62,11 @@ def test_bayesian_ranking_can_reverse_naive_order() -> None:
 
     ranker = RecipeRanker(recipe_ratings)
 
-    assert ranker.rank_by_mean_rating().iloc[0]["recipe_id"] == 101
-    assert ranker.rank_by_bayesian_score(10).iloc[0]["recipe_id"] == 102
+    naive_ranking = ranker.rank_by_mean_rating()
+    weighted_ranking = ranker.rank_by_bayesian_score(smoothing_strength=10)
+
+    assert naive_ranking.iloc[0]["recipe_id"] == 101
+    assert weighted_ranking.iloc[0]["recipe_id"] == 102
 
 
 def test_ranking_ties_use_count_then_recipe_id() -> None:

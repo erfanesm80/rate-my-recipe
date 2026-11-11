@@ -27,7 +27,7 @@ class RecipeRanker:
         if (
             recipe_rating_counts.isna().any()
             or recipe_rating_counts.lt(0).any()
-            or ~recipe_rating_counts.mod(1).eq(0).all()
+            or not recipe_rating_counts.mod(1).eq(0).all()
         ):
             raise ValueError("Valid rating counts must be nonnegative integers")
 
