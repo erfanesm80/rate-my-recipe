@@ -15,7 +15,57 @@ class RecipeDataPreparer:
             self.interactions["rating"].isin(list(range(1, 6)))
         ].copy()
 
+    def validate_input_data(self) -> None:
+        required_recipe_columns = {
+            "id",
+            "name",
+            "minutes",
+            "n_ingredients",
+        }
+        required_interaction_columns = {
+            "user_id",
+            "recipe_id",
+            "rating",
+        }
+
+        missing_recipe_columns = required_recipe_columns - set(self.recipes.columns)
+        missing_interaction_columns = required_interaction_columns - set(
+            self.interactions.columns
+        )
+
+        if missing_recipe_columns:
+            raise ValueError(
+                f"Missing recipe columns: {sorted(missing_recipe_columns)}"
+            )
+
+        if missing_interaction_columns:
+            raise ValueError(
+                f"Missing interaction columns: {sorted(missing_interaction_columns)}"
+            )
+
+        if self.recipes["id"].isna().any():
+            raise ValueError("Recipe IDs must not contain missing values")
+
+        if self.recipes["id"].duplicated().any():
+            raise ValueError("Recipe IDs must be unique")
+
+        if self.interactions["recipe_id"].isna().any():
+            raise ValueError("Interaction recipe IDs must not be missing")
+
+        unknown_recipe_ids = ~self.interactions["recipe_id"].isin(self.recipes["id"])
+
+        if unknown_recipe_ids.any():
+            raise ValueError("Interactions reference unknown recipe IDs")
+
+        invalid_ratings = self.interactions["rating"].isna() | ~self.interactions[
+            "rating"
+        ].isin(range(6))
+
+        if invalid_ratings.any():
+            raise ValueError("Ratings must be integers from 0 to 5")
+
     def build_recipe_rating_summary(self) -> pd.DataFrame:
+        self.validate_input_data()
         valid_rating_interactions = self.get_valid_rating_interactions()
 
         valid_rating_statistics = (
