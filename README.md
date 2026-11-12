@@ -1,12 +1,203 @@
 # Rate My Recipe
 
-A Python data science project for ranking Food.com recipes using user ratings and review counts.
+**Ranking Food.com recipes with star ratings and review counts**
 
-University of Milan - Coding for Data Science and Data Management.
+An individual Python project for *Coding for Data Science and Data Management* at the University of Milan (A.Y. 2026/27).
 
-## Project Goals
+## Overview
 
-- Analyze Food.com recipes and user interactions.
-- Compare naive average ratings with statistically adjusted rankings.
-- Explore recipe rankings across different categories.
-- Build an interactive Streamlit dashboard.
+A recipe rated 5/5 by one person should not necessarily rank above a recipe rated 4.9/5 by hundreds of people. Ranking by average stars alone ignores how much feedback supports each score.
+
+**Rate My Recipe** compares two ways of ranking recipes:
+
+- **Mean-rating baseline:** sort by the average of valid star ratings.
+- **Bayesian-style weighted score:** adjust each recipe's mean toward the overall mean, with a stronger adjustment when the recipe has fewer ratings.
+
+The project uses reproducible data preparation, reusable Python classes, automated tests, and Jupyter notebooks for exploration and evaluation. Detailed numerical findings and plots are kept out of this README: see [Evaluation results](docs/RESULTS.md) and the [ranking analysis notebook](notebooks/ranking_analysis.ipynb).
+
+## Repository structure
+
+```text
+rate-my-recipe/
+├── README.md
+├── .gitignore
+├── data/                         # Local only; ignored by Git
+│   ├── raw/
+│   │   ├── RAW_recipes.csv
+│   │   └── RAW_interactions.csv
+│   └── processed/
+│       └── recipe_rating_summary.csv
+├── docs/
+│   └── RESULTS.md                # Separate evaluation summary
+├── notebooks/
+│   ├── data_exploration.ipynb
+│   └── ranking_analysis.ipynb
+├── rate_my_recipe/
+│   ├── __init__.py
+│   ├── data_preparation.py
+│   ├── ranking.py
+│   └── evaluation.py
+└── tests/
+    ├── test_data_preparation.py
+    ├── test_ranking.py
+    └── test_evaluation.py
+```
+
+`data/` is created locally, not committed. The `docs/RESULTS.md` file is supplementary documentation; the notebooks contain the executable analysis.
+
+| Component | Responsibility |
+| --- | --- |
+| `RecipeDataPreparer` | Validate raw data and aggregate recipe-level rating statistics. |
+| `RecipeRanker` | Compute mean-rating and Bayesian-style leaderboards. |
+| `RankingEvaluator` | Compare top-k membership, rank changes, review-count distributions, and smoothing sensitivity. |
+| `data_exploration.ipynb` | Explore the dataset and export the processed recipe summary. |
+| `ranking_analysis.ipynb` | Run both ranking methods and visualize their differences. |
+| `tests/` | Verify core behavior and edge cases with small synthetic datasets. |
+
+## Dataset
+
+**Source:** [Food.com Recipes and Interactions — Kaggle](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions).
+
+The project uses two files from this dataset:
+
+- `RAW_recipes.csv`: recipe IDs, names, preparation times, ingredient counts, tags, and other metadata.
+- `RAW_interactions.csv`: user–recipe interactions, including ratings, dates, and review text.
+
+The source CSVs are not included in this repository. Download and extract the dataset, then place the two files at:
+
+```text
+data/raw/RAW_recipes.csv
+data/raw/RAW_interactions.csv
+```
+
+The current implementation interprets values **1–5** as valid star ratings. A rating of **0** is treated as an interaction with no usable star score: it contributes to the total interaction count, but not to the rating average or valid-rating count. Recipes without valid ratings remain in the processed data but are excluded from ranked lists.
+
+## Setup and execution
+
+### 1. Clone the project
+
+```bash
+git clone https://github.com/erfanesm80/rate-my-recipe.git
+cd rate-my-recipe
+```
+
+### 2. Create a Python environment
+
+The project was developed with **Python 3.13.15**. The following example uses a virtual environment on macOS/Linux:
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install numpy pandas matplotlib seaborn jupyterlab pytest ruff
+```
+
+A version-pinned `requirements.txt` is planned but is not present in the implementation documented here. The commands above install the packages used by the current notebooks and tests; they do not pin exact versions.
+
+If you already have a suitable Poetry environment, you may use it instead of creating another one.
+
+### 3. Add the input data
+
+After downloading the Kaggle dataset, create the local directories and move the two CSVs into `data/raw/`:
+
+```bash
+mkdir -p data/raw data/processed
+```
+
+### 4. Run the notebooks
+
+**Run Jupyter from the `notebooks/` directory.** The current notebook paths assume that working directory.
+
+```bash
+cd notebooks
+jupyter lab
+```
+
+Select the Python environment prepared above as the notebook kernel, then run all cells in this order:
+
+1. [`data_exploration.ipynb`](notebooks/data_exploration.ipynb): inspect both CSVs, validate and aggregate interactions, and write `data/processed/recipe_rating_summary.csv`.
+2. [`ranking_analysis.ipynb`](notebooks/ranking_analysis.ipynb): load the processed summary, calculate both leaderboards, evaluate their differences, and display plots.
+
+The second notebook depends on the CSV generated by the first. Both import core logic from `rate_my_recipe/` rather than duplicating the implementations.
+
+### 5. Run tests and linting
+
+Return to the repository root, then run:
+
+```bash
+python -m pytest tests/ -v
+ruff check rate_my_recipe tests
+```
+
+With the existing Poetry environment, use `poetry run` before each command instead. The tests use synthetic data, so the Kaggle files are **not** required to run them.
+
+## Methodology
+
+### Data preparation
+
+`RecipeDataPreparer` validates required columns, recipe IDs, rating values, and recipe references before generating one row per recipe. The processed table contains:
+
+| Column | Description |
+| --- | --- |
+| `recipe_id` | Unique recipe identifier |
+| `recipe_name` | Name from recipe metadata |
+| `preparation_time_minutes` | Reported preparation time |
+| `ingredient_count` | Reported number of ingredients |
+| `interaction_count` | All interactions, including zero ratings |
+| `valid_rating_count` | Number of ratings from 1 to 5 |
+| `mean_valid_rating` | Mean of valid ratings; missing if none exist |
+
+### Why not rank by the average alone?
+
+[Evan Miller's *How Not To Sort By Average Rating* (2009)](https://www.evanmiller.org/how-not-to-sort-by-average-rating.html) motivates the central issue: an excellent average based on a handful of ratings is less informative than an average supported by many observations. Miller proposes the **Wilson score lower bound for binary positive/negative feedback**. Because this project retains the original **1–5-star scale**, it **does not apply that binary Wilson formula**. Instead, it uses the following simple, review-count-aware shrinkage score. The formula below is this project's chosen approach, not the method implemented in Miller's article.
+
+### Mean-rating baseline
+
+For recipe $i$, let $n_i$ be the number of valid ratings and $\bar r_i$ their mean:
+
+$$
+S_i^{\text{mean}} = \bar r_i
+$$
+
+### Bayesian-style weighted score
+
+$$
+S_i^{\text{weighted}} = \frac{n_i\bar r_i + mC}{n_i + m}
+$$
+
+where:
+
+- $C$ is the mean of **all individual valid ratings**, computed as $\sum_i n_i\bar r_i / \sum_i n_i$;
+- $m>0$ is the smoothing strength, expressed in rating-equivalent weight;
+- $n_i$ and $\bar r_i$ describe the observed ratings for recipe $i$.
+
+The score is a weighted combination of the recipe mean and the global mean. Recipes with fewer ratings receive more shrinkage toward $C$. The main notebook comparison uses **$m=10$** and also examines other values. This is a **Bayesian-style shrinkage heuristic**, not a full probabilistic model or a Wilson confidence bound.
+
+Both leaderboards exclude unrated recipes and break ties deterministically by **score descending**, then **valid-rating count descending**, then **recipe ID ascending**.
+
+## Evaluation
+
+`RankingEvaluator` examines:
+
+- **Top-k overlap:** shared recipes between the two top-k lists.
+- **Rank changes:** how far individual recipes move between methods.
+- **Rating-count comparisons:** the number of observations supporting top-ranked recipes.
+- **Smoothing sensitivity:** how changing $m$ affects the leaderboard.
+
+The comparisons describe ranking behavior; they do not establish which ranking predicts future user satisfaction better.
+
+For the actual tables, figures, and interpretation, see:
+
+- [Evaluation results](docs/RESULTS.md) — concise written findings.
+- [Ranking analysis notebook](notebooks/ranking_analysis.ipynb) — executable analysis and plots.
+
+## Limitations and future work
+
+The current method relies on observed ratings, which may be sparse or subject to selection bias. Rating zero is treated as missing feedback, and the value of $m$ is not selected using an external measure of recommendation quality. Some recipe metadata, particularly reported preparation times, contain anomalies requiring care in future filtering.
+
+**Not yet implemented in this snapshot:** category-based ranking by tags, preparation time, and ingredient count; additional parameter-stability analysis; an end-to-end workflow test; pinned dependencies and more portable notebook paths; and an optional Streamlit interface.
+
+## References
+
+- [Food.com Recipes and Interactions — Kaggle](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions)
+- [Evan Miller (2009), *How Not To Sort By Average Rating*](https://www.evanmiller.org/how-not-to-sort-by-average-rating.html)
+- [Coding for Data Science and Data Management — University of Milan](https://github.com/sergiopicascia/codingdse-py)
