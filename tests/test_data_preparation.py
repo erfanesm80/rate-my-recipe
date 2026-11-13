@@ -41,17 +41,9 @@ def test_recipe_summary_preserves_unrated_recipes(
     summary = summary.set_index("recipe_id")
 
     assert len(summary) == 3
-
-    assert summary.loc[101, "interaction_count"] == 2
-    assert summary.loc[101, "valid_rating_count"] == 2
-    assert summary.loc[101, "mean_valid_rating"] == 4.0
-
-    assert summary.loc[102, "interaction_count"] == 2
-    assert summary.loc[102, "valid_rating_count"] == 1
-    assert summary.loc[102, "mean_valid_rating"] == 4.0
-
-    assert summary.loc[103, "interaction_count"] == 1
-    assert summary.loc[103, "valid_rating_count"] == 0
+    assert summary["interaction_count"].to_dict() == {101: 2, 102: 2, 103: 1}
+    assert summary["valid_rating_count"].to_dict() == {101: 2, 102: 1, 103: 0}
+    assert summary.loc[[101, 102], "mean_valid_rating"].tolist() == [4.0, 4.0]
     assert pd.isna(summary.loc[103, "mean_valid_rating"])
 
 
@@ -112,3 +104,51 @@ def test_missing_required_columns_are_rejected(
 
     with pytest.raises(ValueError, match="Missing recipe columns"):
         sample_preparer.build_recipe_rating_summary()
+
+
+def test_recipe_tag_index_normalizes_and_deduplicates(
+    sample_preparer: RecipeDataPreparer,
+) -> None:
+    sample_preparer.recipes["tags"] = [
+        "[' Vegetarian ', 'quick', 'vegetarian']",
+        "['quick']",
+        "[]",
+    ]
+
+    tag_index = sample_preparer.build_recipe_tag_index()
+
+    assert tag_index.to_dict("records") == [
+        {"recipe_id": 101, "tag": "vegetarian"},
+        {"recipe_id": 101, "tag": "quick"},
+        {"recipe_id": 102, "tag": "quick"},
+    ]
+
+
+def test_missing_tags_column_is_rejected(
+    sample_preparer: RecipeDataPreparer,
+) -> None:
+    with pytest.raises(ValueError, match="Missing recipe columns"):
+        sample_preparer.build_recipe_tag_index()
+
+
+@pytest.mark.parametrize(
+    "invalid_tags,expected_exception",
+    [
+        ("not a list", ValueError),
+        ("['vegetarian', 123]", ValueError),
+        (None, TypeError),
+    ],
+)
+def test_invalid_tag_data_is_rejected(
+    sample_preparer: RecipeDataPreparer,
+    invalid_tags: str | None,
+    expected_exception: type[Exception],
+) -> None:
+    sample_preparer.recipes["tags"] = [
+        invalid_tags,
+        "['quick']",
+        "[]",
+    ]
+
+    with pytest.raises(expected_exception, match="Recipe tags"):
+        sample_preparer.build_recipe_tag_index()

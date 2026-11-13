@@ -1,3 +1,5 @@
+import ast
+
 import pandas as pd
 
 
@@ -117,3 +119,41 @@ class RecipeDataPreparer:
         )
 
         return recipe_rating_summary
+
+    def build_recipe_tag_index(self) -> pd.DataFrame:
+        self.validate_input_data()
+
+        if "tags" not in self.recipes.columns:
+            raise ValueError("Missing recipe columns: ['tags']")
+
+        recipe_tags = (
+            self.recipes[["id", "tags"]].rename(columns={"id": "recipe_id"}).copy()
+        )
+
+        recipe_tags["tag"] = recipe_tags["tags"].map(self._parse_recipe_tags)
+
+        return (
+            recipe_tags.drop(columns="tags")
+            .explode("tag", ignore_index=True)
+            .dropna(subset=["tag"])
+            .drop_duplicates(ignore_index=True)
+        )
+
+    @staticmethod
+    def _parse_recipe_tags(raw_tags: str) -> list[str]:
+        if not isinstance(raw_tags, str):
+            raise TypeError("Recipe tags must be serialized lists of strings")
+
+        try:
+            parsed_tags = ast.literal_eval(raw_tags)
+        except (ValueError, SyntaxError) as error:
+            raise ValueError(
+                "Recipe tags must be serialized lists of strings"
+            ) from error
+
+        if not isinstance(parsed_tags, list) or any(
+            not isinstance(tag, str) for tag in parsed_tags
+        ):
+            raise ValueError("Recipe tags must be serialized lists of strings")
+
+        return [tag.strip().lower() for tag in parsed_tags if tag.strip()]
