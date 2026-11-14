@@ -3,7 +3,10 @@ import pandas as pd
 
 
 class RecipeRanker:
+    """Rank recipes using observed means and Bayesian-style shrinkage."""
+
     def __init__(self, recipe_rating_summary: pd.DataFrame) -> None:
+        """Validate and store recipe-level rating statistics."""
         required_columns = {
             "recipe_id",
             "valid_rating_count",
@@ -46,6 +49,7 @@ class RecipeRanker:
         self.recipe_rating_summary = recipe_rating_summary.copy()
 
     def calculate_global_mean_rating(self) -> float:
+        """Return the rating-count-weighted mean across recipes."""
         rated_recipes = self.recipe_rating_summary.loc[
             self.recipe_rating_summary["valid_rating_count"].gt(0)
         ]
@@ -62,6 +66,7 @@ class RecipeRanker:
         return float(weighted_rating_sum / total_valid_ratings)
 
     def rank_by_mean_rating(self) -> pd.DataFrame:
+        """Return recipes ranked by their observed mean ratings."""
         rated_recipes = self.recipe_rating_summary.loc[
             self.recipe_rating_summary["valid_rating_count"].gt(0)
         ].copy()
@@ -74,6 +79,7 @@ class RecipeRanker:
         self,
         smoothing_strength: float = 10.0,
     ) -> pd.DataFrame:
+        """Return recipes ranked using the supplied smoothing strength."""
         if not np.isfinite(smoothing_strength) or smoothing_strength <= 0:
             raise ValueError("Smoothing strength must be a positive finite number")
 
@@ -96,6 +102,7 @@ class RecipeRanker:
         self,
         rated_recipes: pd.DataFrame,
     ) -> pd.DataFrame:
+        """Sort scored recipes and assign consecutive ranks."""
         ranked_recipes = rated_recipes.sort_values(
             by=[
                 "ranking_score",

@@ -4,20 +4,25 @@ import pandas as pd
 
 
 class RecipeDataPreparer:
+    """Validate and prepare Food.com recipe and interaction data."""
+
     def __init__(
         self,
         recipes: pd.DataFrame,
         interactions: pd.DataFrame,
     ) -> None:
+        """Store recipe metadata and user interactions."""
         self.recipes = recipes
         self.interactions = interactions
 
     def get_valid_rating_interactions(self) -> pd.DataFrame:
+        """Return interactions with valid ratings from 1 to 5."""
         return self.interactions.loc[
             self.interactions["rating"].isin(list(range(1, 6)))
         ].copy()
 
     def validate_input_data(self) -> None:
+        """Validate required columns, IDs, and rating values."""
         required_recipe_columns = {
             "id",
             "name",
@@ -67,6 +72,7 @@ class RecipeDataPreparer:
             raise ValueError("Ratings must be integers from 0 to 5")
 
     def build_recipe_rating_summary(self) -> pd.DataFrame:
+        """Return one row per recipe with aggregated rating statistics."""
         self.validate_input_data()
         valid_rating_interactions = self.get_valid_rating_interactions()
 
@@ -121,6 +127,7 @@ class RecipeDataPreparer:
         return recipe_rating_summary
 
     def build_recipe_tag_index(self) -> pd.DataFrame:
+        """Return unique, normalized recipe-tag assignments."""
         self.validate_input_data()
 
         if "tags" not in self.recipes.columns:
@@ -141,6 +148,7 @@ class RecipeDataPreparer:
 
     @staticmethod
     def _parse_recipe_tags(raw_tags: str) -> list[str]:
+        """Parse a serialized list of recipe tags into normalized strings."""
         if not isinstance(raw_tags, str):
             raise TypeError("Recipe tags must be serialized lists of strings")
 

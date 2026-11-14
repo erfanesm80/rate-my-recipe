@@ -4,11 +4,14 @@ from rate_my_recipe.ranking import RecipeRanker
 
 
 class RankingEvaluator:
+    """Compare recipe leaderboards and evaluate ranking sensitivity."""
+
     def __init__(
         self,
         naive_ranking: pd.DataFrame,
         bayesian_ranking: pd.DataFrame,
     ) -> None:
+        """Validate and store the naive and Bayesian-style rankings."""
         required_columns = {
             "recipe_id",
             "rank",
@@ -35,6 +38,7 @@ class RankingEvaluator:
         self.bayesian_ranking = bayesian_ranking.copy()
 
     def compare_top_k(self, top_k: int = 20) -> dict:
+        """Return the shared recipe count and percentage for a top-k cutoff."""
         self._validate_top_k(top_k)
 
         naive_top_ids = set(self.naive_ranking.head(top_k)["recipe_id"])
@@ -49,6 +53,7 @@ class RankingEvaluator:
         }
 
     def compare_rank_changes(self) -> pd.DataFrame:
+        """Return per-recipe rank changes between the two methods."""
         naive_positions = self.naive_ranking[
             ["recipe_id", "rank", "ranking_score"]
         ].rename(
@@ -91,6 +96,7 @@ class RankingEvaluator:
         self,
         top_k: int = 20,
     ) -> pd.DataFrame:
+        """Summarize rating counts among top-ranked recipes."""
         self._validate_top_k(top_k)
 
         ranking_summaries = []
@@ -119,6 +125,7 @@ class RankingEvaluator:
         smoothing_strengths: list[float],
         top_k: int = 20,
     ) -> pd.DataFrame:
+        """Evaluate top-k behavior across smoothing strengths."""
         self._validate_top_k(top_k)
 
         if not smoothing_strengths:
@@ -152,6 +159,7 @@ class RankingEvaluator:
         return pd.DataFrame(sensitivity_results)
 
     def _validate_top_k(self, top_k: int) -> None:
+        """Reject invalid top-k cutoffs."""
         if (
             isinstance(top_k, bool)
             or not isinstance(top_k, int)
