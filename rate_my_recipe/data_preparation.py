@@ -5,25 +5,38 @@ import pandas as pd
 
 
 class RecipeDataPreparer:
-    """Validate and prepare Food.com recipe and interaction data."""
+    """Validate Food.com data and prepare recipe-level datasets."""
 
     def __init__(
         self,
         recipes: pd.DataFrame,
         interactions: pd.DataFrame,
     ) -> None:
-        """Store recipe metadata and user interactions."""
+        """Store recipe metadata and user interactions.
+        Args:
+            recipes: Recipe metadata containing IDs, names, and attributes.
+            interactions: User-recipe interactions containing IDs and ratings.
+        """
         self.recipes = recipes
         self.interactions = interactions
 
     def get_valid_rating_interactions(self) -> pd.DataFrame:
-        """Return interactions with valid ratings from 1 to 5."""
+        """Select interactions with valid star ratings.
+        Returns:
+            Copy of interaction rows with ratings from 1 to 5,
+            excluding zero ratings.
+        """
         return self.interactions.loc[
             self.interactions["rating"].isin(list(range(1, 6)))
         ].copy()
 
     def validate_input_data(self) -> None:
-        """Validate required columns, IDs, and rating values."""
+        """Validate recipe identifiers, references, and rating values.
+        Raises:
+            ValueError: If required columns are missing, recipe IDs are
+                invalid or duplicated, interactions reference unknown
+                recipes, or ratings contain invalid values.
+        """
         required_recipe_columns = {
             "id",
             "name",
@@ -75,7 +88,16 @@ class RecipeDataPreparer:
             raise ValueError("Ratings must be integers from 0 to 5")
 
     def build_recipe_rating_summary(self) -> pd.DataFrame:
-        """Return one row per recipe with aggregated rating statistics."""
+        """Aggregate recipe metadata and rating statistics.
+
+        Returns:
+            DataFrame containing one row per recipe, including metadata,
+            total interactions, valid rating counts, and mean valid ratings.
+            Unrated recipes retain zero counts and a missing mean rating.
+
+        Raises:
+            ValueError: If required columns, recipe IDs, or ratings are invalid.
+        """
         self.validate_input_data()
         valid_rating_interactions = self.get_valid_rating_interactions()
 
@@ -130,7 +152,15 @@ class RecipeDataPreparer:
         return recipe_rating_summary
 
     def build_recipe_tag_index(self) -> pd.DataFrame:
-        """Return unique, normalized recipe-tag assignments."""
+        """Build a normalized index of recipe-tag assignments.
+        Returns:
+            DataFrame with unique recipe_id and tag pairs, using
+            lowercase tags without surrounding whitespace.
+
+        Raises:
+            ValueError: If input data or serialized tag lists are invalid.
+            TypeError: If a serialized tag-list value is not a string.
+        """
         self.validate_input_data()
 
         if "tags" not in self.recipes.columns:
@@ -151,7 +181,18 @@ class RecipeDataPreparer:
 
     @staticmethod
     def _parse_recipe_tags(raw_tags: str) -> list[str]:
-        """Parse a serialized list of recipe tags into normalized strings."""
+        """Parse and normalize a serialized list of recipe tags.
+        Args:
+            raw_tags: String representation of a Python list of tags.
+
+        Returns:
+            List of lowercase, stripped tags with empty values removed.
+
+        Raises:
+            TypeError: If raw_tags is not a string.
+            ValueError: If the literal is malformed or does not contain
+                a list of strings.
+        """
         if not isinstance(raw_tags, str):
             raise TypeError("Recipe tags must be serialized lists of strings")
 

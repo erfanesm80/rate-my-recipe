@@ -11,7 +11,15 @@ class RankingEvaluator:
         naive_ranking: pd.DataFrame,
         bayesian_ranking: pd.DataFrame,
     ) -> None:
-        """Validate and store the naive and Bayesian-style rankings."""
+        """Validate and store rankings over the same recipe population.
+        Args:
+            naive_ranking: Recipes ordered by observed mean rating.
+            bayesian_ranking: Recipes ordered by Bayesian-style score.
+
+        Raises:
+            ValueError: If required columns, ranks, recipe IDs, or
+                per-recipe rating counts are inconsistent.
+        """
         required_columns = {
             "recipe_id",
             "rank",
@@ -49,7 +57,20 @@ class RankingEvaluator:
         self.bayesian_ranking = bayesian_ranking.copy()
 
     def compare_top_k(self, top_k: int = 20) -> dict:
-        """Return the shared recipe count and percentage for a top-k cutoff."""
+        """Measure the overlap between the two top-k rankings.
+
+        Args:
+            top_k: Number of highest-ranked recipes to compare.
+                Defaults to 20.
+
+        Returns:
+            Dictionary containing top_k, shared_recipe_count, and
+            overlap_percentage, expressed on a 0–100 scale.
+
+        Raises:
+            ValueError: If top_k is not an integer between 1 and the
+                number of ranked recipes.
+        """
         self._validate_top_k(top_k)
 
         naive_top_ids = set(self.naive_ranking.head(top_k)["recipe_id"])
@@ -64,7 +85,14 @@ class RankingEvaluator:
         }
 
     def compare_rank_changes(self) -> pd.DataFrame:
-        """Return per-recipe rank changes between the two methods."""
+        """Calculate recipe-level rank changes between ranking methods.
+        Returns:
+            DataFrame containing both ranks, both scores, valid rating
+            counts, and rank_improvement, sorted by improvement.
+
+            Positive improvement indicates a higher position under
+            Bayesian-style ranking.
+        """
         naive_positions = self.naive_ranking[
             ["recipe_id", "rank", "ranking_score"]
         ].rename(
@@ -107,7 +135,18 @@ class RankingEvaluator:
         self,
         top_k: int = 20,
     ) -> pd.DataFrame:
-        """Summarize rating counts among top-ranked recipes."""
+        """Summarize rating counts among each ranking's top-k recipes.
+        Args:
+            top_k: Number of highest-ranked recipes to examine.
+                Defaults to 20.
+
+        Returns:
+            DataFrame containing the mean, median, minimum, and maximum
+            valid rating counts for each ranking method.
+
+        Raises:
+            ValueError: If top_k is outside the valid range.
+        """
         self._validate_top_k(top_k)
 
         ranking_summaries = []
@@ -136,7 +175,29 @@ class RankingEvaluator:
         smoothing_strengths: list[float],
         top_k: int = 20,
     ) -> pd.DataFrame:
-        """Evaluate top-k behavior across smoothing strengths."""
+        """Evaluate how smoothing strength affects top-k rankings.
+
+        Compares Bayesian-style top-k lists against the naive ranking
+        for each specified smoothing strength.
+
+        Args:
+            recipe_ranker: Ranker corresponding to the evaluator's
+                original recipe population and naive ranking.
+            smoothing_strengths: Nonempty list of positive finite
+                smoothing parameters to evaluate.
+            top_k: Number of highest-ranked recipes to compare.
+                Defaults to 20.
+
+        Returns:
+            DataFrame containing each smoothing strength, its top-k
+            overlap percentage with the naive ranking, and the median
+            valid-rating count among its top-ranked recipes.
+
+        Raises:
+            ValueError: If top_k or a smoothing strength is invalid,
+                the parameter list is empty, or the ranker does not
+                match the evaluator's naive ranking.
+        """
         self._validate_top_k(top_k)
 
         if not smoothing_strengths:
@@ -183,7 +244,14 @@ class RankingEvaluator:
         return pd.DataFrame(sensitivity_results)
 
     def _validate_top_k(self, top_k: int) -> None:
-        """Reject invalid top-k cutoffs."""
+        """Validate the requested leaderboard cutoff.
+        Args:
+            top_k: Number of top-ranked recipes to include.
+
+        Raises:
+            ValueError: If top_k is not a non-boolean integer between
+                1 and the number of ranked recipes.
+        """
         if (
             isinstance(top_k, bool)
             or not isinstance(top_k, int)

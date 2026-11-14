@@ -3,10 +3,18 @@ import pandas as pd
 
 
 class RecipeRanker:
-    """Rank recipes using observed means and Bayesian-style shrinkage."""
+    """Validate recipe ratings and produce deterministic leaderboards."""
 
     def __init__(self, recipe_rating_summary: pd.DataFrame) -> None:
-        """Validate and store recipe-level rating statistics."""
+        """Validate and store recipe-level rating statistics.
+        Args:
+            recipe_rating_summary: DataFrame containing recipe IDs,
+                valid rating counts, and mean valid ratings.
+
+        Raises:
+            ValueError: If required columns, recipe IDs, rating counts,
+                or mean ratings are invalid.
+        """
         required_columns = {
             "recipe_id",
             "valid_rating_count",
@@ -49,7 +57,13 @@ class RecipeRanker:
         self.recipe_rating_summary = recipe_rating_summary.copy()
 
     def calculate_global_mean_rating(self) -> float:
-        """Return the rating-count-weighted mean across recipes."""
+        """Calculate the mean across all individual valid ratings.
+        Returns:
+            Global mean weighted by each recipe's valid rating count.
+
+        Raises:
+            ValueError: If no valid ratings are available.
+        """
         rated_recipes = self.recipe_rating_summary.loc[
             self.recipe_rating_summary["valid_rating_count"].gt(0)
         ]
@@ -66,7 +80,12 @@ class RecipeRanker:
         return float(weighted_rating_sum / total_valid_ratings)
 
     def rank_by_mean_rating(self) -> pd.DataFrame:
-        """Return recipes ranked by their observed mean ratings."""
+        """Rank recipes by their observed mean star ratings.
+        Returns:
+            DataFrame of rated recipes sorted by descending mean rating,
+            with rating count and recipe ID used to break ties.
+            Includes ranking scores and consecutive ranks.
+        """
         rated_recipes = self.recipe_rating_summary.loc[
             self.recipe_rating_summary["valid_rating_count"].gt(0)
         ].copy()
@@ -79,7 +98,20 @@ class RecipeRanker:
         self,
         smoothing_strength: float = 10.0,
     ) -> pd.DataFrame:
-        """Return recipes ranked using the supplied smoothing strength."""
+        """Rank rated recipes using Bayesian-style shrinkage.
+
+        Args:
+            smoothing_strength: Positive finite weight assigned to the
+                global mean. Defaults to 10.0.
+
+        Returns:
+            DataFrame containing rated recipes sorted by adjusted score,
+            rating count, and recipe ID, with consecutive ranks.
+
+        Raises:
+            ValueError: If smoothing strength is invalid or no valid
+                ratings are available.
+        """
         if (
             isinstance(smoothing_strength, (bool, np.bool_))
             or not np.isfinite(smoothing_strength)
@@ -106,7 +138,15 @@ class RecipeRanker:
         self,
         rated_recipes: pd.DataFrame,
     ) -> pd.DataFrame:
-        """Sort scored recipes and assign consecutive ranks."""
+        """Sort scored recipes and assign consecutive ranks.
+        Args:
+            rated_recipes: DataFrame containing ranking scores,
+                valid rating counts, and recipe IDs.
+
+        Returns:
+            DataFrame sorted by descending score, descending rating
+            count, and ascending recipe ID, with ranks starting at 1.
+        """
         ranked_recipes = rated_recipes.sort_values(
             by=[
                 "ranking_score",
