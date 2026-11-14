@@ -1,4 +1,3 @@
-import pandas as pd
 import pytest
 
 from rate_my_recipe.evaluation import RankingEvaluator
@@ -6,103 +5,76 @@ from rate_my_recipe.ranking import RecipeRanker
 
 
 @pytest.fixture
-def sample_evaluator() -> RankingEvaluator:
-    naive_ranking = pd.DataFrame(
-        {
-            "recipe_id": [101, 102, 103],
-            "rank": [1, 2, 3],
-            "ranking_score": [5.0, 4.8, 4.0],
-            "valid_rating_count": [1, 100, 20],
-        }
+def sample_evaluator(sample_ranker: RecipeRanker) -> RankingEvaluator:
+    return RankingEvaluator(
+        sample_ranker.rank_by_mean_rating(),
+        sample_ranker.rank_by_bayesian_score(10),
     )
 
-    bayesian_ranking = pd.DataFrame(
-        {
-            "recipe_id": [102, 103, 101],
-            "rank": [1, 2, 3],
-            "ranking_score": [4.7, 4.2, 4.1],
-            "valid_rating_count": [100, 20, 1],
-        }
-    )
 
-    return RankingEvaluator(naive_ranking, bayesian_ranking)
-
-
-@pytest.fixture
-def sample_ranker() -> RecipeRanker:
-    recipe_ratings = pd.DataFrame(
-        {
-            "recipe_id": [101, 102, 103],
-            "valid_rating_count": [1, 100, 100],
-            "mean_valid_rating": [5.0, 4.8, 3.0],
-        }
-    )
-
-    return RecipeRanker(recipe_ratings)
-
-
+@pytest.mark.parametrize(
+    "top_k,shared_count,overlap_percentage",
+    [(1, 0, 0.0), (2, 1, 50.0), (4, 4, 100.0)],
+)
 def test_top_k_overlap(
     sample_evaluator: RankingEvaluator,
+    top_k: int,
+    shared_count: int,
+    overlap_percentage: float,
 ) -> None:
-    comparison = sample_evaluator.compare_top_k(top_k=2)
+    assert sample_evaluator.compare_top_k(top_k) == {
+        "top_k": top_k,
+        "shared_recipe_count": shared_count,
+        "overlap_percentage": overlap_percentage,
+    }
 
-    assert comparison["shared_recipe_count"] == 1
-    assert comparison["overlap_percentage"] == 50.0
 
-
-def test_rank_improvements(
-    sample_evaluator: RankingEvaluator,
-) -> None:
+def test_rank_improvements(sample_evaluator: RankingEvaluator) -> None:
     rank_changes = sample_evaluator.compare_rank_changes()
     improvements = rank_changes.set_index("recipe_id")["rank_improvement"].to_dict()
 
-    assert improvements == {101: -2, 102: 1, 103: 1}
+    assert improvements == {101: -2, 102: 1, 103: 1, 104: 0}
 
 
-def test_top_k_rating_counts(
-    sample_evaluator: RankingEvaluator,
-) -> None:
-    comparison = sample_evaluator.compare_top_k_rating_counts(top_k=2).set_index(
+def test_top_k_rating_counts(sample_evaluator: RankingEvaluator) -> None:
+    comparison = sample_evaluator.compare_top_k_rating_counts(2).set_index(
         "ranking_method"
     )
 
     assert comparison.loc["naive", "median_rating_count"] == 50.5
     assert comparison.loc["bayesian", "median_rating_count"] == 60.0
+    assert comparison.loc["naive", "min_rating_count"] == 1
+    assert comparison.loc["bayesian", "min_rating_count"] == 20
 
 
-@pytest.mark.parametrize("top_k", [0, -1, 4, 1.5, True])
+@pytest.mark.parametrize("top_k", [0, -1, 5, 1.5, True])
 def test_invalid_top_k(
     sample_evaluator: RankingEvaluator,
-    top_k: float,
+    top_k: float | bool,
 ) -> None:
     with pytest.raises(ValueError, match="top_k"):
         sample_evaluator.compare_top_k(top_k)
 
 
-def test_different_recipe_populations_are_rejected(
+@pytest.mark.parametrize(
+    "column,replacement,error_message",
+    [
+        ("recipe_id", 999, "same recipe IDs"),
+        ("rank", 2, "consecutive"),
+        ("valid_rating_count", 999, "rating counts"),
+    ],
+)
+def test_inconsistent_rankings_are_rejected(
     sample_evaluator: RankingEvaluator,
+    column: str,
+    replacement: int,
+    error_message: str,
 ) -> None:
     invalid_ranking = sample_evaluator.bayesian_ranking.copy()
-    invalid_ranking.loc[0, "recipe_id"] = 999
+    invalid_ranking.loc[0, column] = replacement
 
-    with pytest.raises(ValueError, match="same recipe IDs"):
-        RankingEvaluator(
-            sample_evaluator.naive_ranking,
-            invalid_ranking,
-        )
-
-
-def test_invalid_ranks_are_rejected(
-    sample_evaluator: RankingEvaluator,
-) -> None:
-    invalid_ranking = sample_evaluator.bayesian_ranking.copy()
-    invalid_ranking.loc[0, "rank"] = 2
-
-    with pytest.raises(ValueError, match="consecutive"):
-        RankingEvaluator(
-            sample_evaluator.naive_ranking,
-            invalid_ranking,
-        )
+    with pytest.raises(ValueError, match=error_message):
+        RankingEvaluator(sample_evaluator.naive_ranking, invalid_ranking)
 
 
 def test_missing_columns_are_rejected(
@@ -111,21 +83,14 @@ def test_missing_columns_are_rejected(
     invalid_ranking = sample_evaluator.bayesian_ranking.drop(columns="ranking_score")
 
     with pytest.raises(ValueError, match="Missing ranking columns"):
-        RankingEvaluator(
-            sample_evaluator.naive_ranking,
-            invalid_ranking,
-        )
+        RankingEvaluator(sample_evaluator.naive_ranking, invalid_ranking)
 
 
 def test_smoothing_sensitivity(
     sample_ranker: RecipeRanker,
+    sample_evaluator: RankingEvaluator,
 ) -> None:
-    evaluator = RankingEvaluator(
-        sample_ranker.rank_by_mean_rating(),
-        sample_ranker.rank_by_bayesian_score(10),
-    )
-
-    results = evaluator.evaluate_smoothing_sensitivity(
+    results = sample_evaluator.evaluate_smoothing_sensitivity(
         recipe_ranker=sample_ranker,
         smoothing_strengths=[0.1, 1, 10],
         top_k=1,
@@ -138,30 +103,13 @@ def test_smoothing_sensitivity(
 
 def test_empty_smoothing_strengths_are_rejected(
     sample_ranker: RecipeRanker,
+    sample_evaluator: RankingEvaluator,
 ) -> None:
-    evaluator = RankingEvaluator(
-        sample_ranker.rank_by_mean_rating(),
-        sample_ranker.rank_by_bayesian_score(10),
-    )
-
     with pytest.raises(ValueError, match="at least one"):
-        evaluator.evaluate_smoothing_sensitivity(
+        sample_evaluator.evaluate_smoothing_sensitivity(
             recipe_ranker=sample_ranker,
             smoothing_strengths=[],
             top_k=1,
-        )
-
-
-def test_inconsistent_rating_counts_are_rejected(
-    sample_evaluator: RankingEvaluator,
-) -> None:
-    invalid_ranking = sample_evaluator.bayesian_ranking.copy()
-    invalid_ranking.loc[0, "valid_rating_count"] = 999
-
-    with pytest.raises(ValueError, match="rating counts"):
-        RankingEvaluator(
-            sample_evaluator.naive_ranking,
-            invalid_ranking,
         )
 
 
@@ -175,21 +123,17 @@ def test_inconsistent_rating_counts_are_rejected(
 )
 def test_smoothing_sensitivity_rejects_mismatched_ranker(
     sample_ranker: RecipeRanker,
+    sample_evaluator: RankingEvaluator,
     column: str,
     replacement: float,
 ) -> None:
-    evaluator = RankingEvaluator(
-        sample_ranker.rank_by_mean_rating(),
-        sample_ranker.rank_by_bayesian_score(10),
-    )
-
     modified_summary = sample_ranker.recipe_rating_summary.copy()
     modified_summary.loc[0, column] = replacement
 
     mismatched_ranker = RecipeRanker(modified_summary)
 
     with pytest.raises(ValueError, match="must match"):
-        evaluator.evaluate_smoothing_sensitivity(
+        sample_evaluator.evaluate_smoothing_sensitivity(
             recipe_ranker=mismatched_ranker,
             smoothing_strengths=[10],
             top_k=1,

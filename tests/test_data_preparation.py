@@ -37,8 +37,7 @@ def test_valid_rating_filter_excludes_zero(
 def test_recipe_summary_preserves_unrated_recipes(
     sample_preparer: RecipeDataPreparer,
 ) -> None:
-    summary = sample_preparer.build_recipe_rating_summary()
-    summary = summary.set_index("recipe_id")
+    summary = sample_preparer.build_recipe_rating_summary().set_index("recipe_id")
 
     assert len(summary) == 3
     assert summary["interaction_count"].to_dict() == {101: 2, 102: 2, 103: 1}
@@ -47,14 +46,25 @@ def test_recipe_summary_preserves_unrated_recipes(
     assert pd.isna(summary.loc[103, "mean_valid_rating"])
 
 
+def test_empty_interactions_preserve_all_recipes(
+    sample_preparer: RecipeDataPreparer,
+) -> None:
+    sample_preparer.interactions = sample_preparer.interactions.iloc[:0]
+
+    summary = sample_preparer.build_recipe_rating_summary()
+
+    assert len(summary) == 3
+    assert summary["interaction_count"].eq(0).all()
+    assert summary["valid_rating_count"].eq(0).all()
+    assert summary["mean_valid_rating"].isna().all()
+
+
 def test_duplicate_recipe_ids_are_rejected(
     sample_preparer: RecipeDataPreparer,
 ) -> None:
     sample_preparer.recipes = pd.concat(
-        [
-            sample_preparer.recipes,
-            sample_preparer.recipes.iloc[[0]],
-        ]
+        [sample_preparer.recipes, sample_preparer.recipes.iloc[[0]]],
+        ignore_index=True,
     )
 
     with pytest.raises(ValueError, match="unique"):
@@ -70,31 +80,18 @@ def test_unknown_recipe_ids_are_rejected(
         sample_preparer.build_recipe_rating_summary()
 
 
-@pytest.mark.parametrize("invalid_rating", [-1, 6, 2.5, None])
+@pytest.mark.parametrize("invalid_rating", [-1, 6, 2.5, None, True, False])
 def test_invalid_ratings_are_rejected(
     sample_preparer: RecipeDataPreparer,
-    invalid_rating: float | None,
+    invalid_rating: float | bool | None,
 ) -> None:
     sample_preparer.interactions["rating"] = sample_preparer.interactions[
         "rating"
-    ].astype(float)
+    ].astype(object)
     sample_preparer.interactions.loc[0, "rating"] = invalid_rating
 
     with pytest.raises(ValueError, match="Ratings"):
         sample_preparer.build_recipe_rating_summary()
-
-
-def test_empty_interactions_preserve_all_recipes(
-    sample_preparer: RecipeDataPreparer,
-) -> None:
-    sample_preparer.interactions = sample_preparer.interactions.iloc[0:0]
-
-    summary = sample_preparer.build_recipe_rating_summary()
-
-    assert len(summary) == 3
-    assert summary["interaction_count"].eq(0).all()
-    assert summary["valid_rating_count"].eq(0).all()
-    assert summary["mean_valid_rating"].isna().all()
 
 
 def test_missing_required_columns_are_rejected(
@@ -144,25 +141,7 @@ def test_invalid_tag_data_is_rejected(
     invalid_tags: str | None,
     expected_exception: type[Exception],
 ) -> None:
-    sample_preparer.recipes["tags"] = [
-        invalid_tags,
-        "['quick']",
-        "[]",
-    ]
+    sample_preparer.recipes["tags"] = [invalid_tags, "['quick']", "[]"]
 
     with pytest.raises(expected_exception, match="Recipe tags"):
         sample_preparer.build_recipe_tag_index()
-
-
-@pytest.mark.parametrize("boolean_rating", [True, False])
-def test_boolean_ratings_are_rejected(
-    sample_preparer: RecipeDataPreparer,
-    boolean_rating: bool,
-) -> None:
-    sample_preparer.interactions["rating"] = sample_preparer.interactions[
-        "rating"
-    ].astype(object)
-    sample_preparer.interactions.loc[0, "rating"] = boolean_rating
-
-    with pytest.raises(ValueError, match="Ratings"):
-        sample_preparer.build_recipe_rating_summary()
