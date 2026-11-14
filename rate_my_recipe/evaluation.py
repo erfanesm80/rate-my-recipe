@@ -34,6 +34,17 @@ class RankingEvaluator:
         if set(naive_ranking["recipe_id"]) != set(bayesian_ranking["recipe_id"]):
             raise ValueError("Rankings must contain the same recipe IDs")
 
+        naive_counts = naive_ranking.set_index("recipe_id")[
+            "valid_rating_count"
+        ].sort_index()
+
+        bayesian_counts = bayesian_ranking.set_index("recipe_id")[
+            "valid_rating_count"
+        ].sort_index()
+
+        if not naive_counts.equals(bayesian_counts):
+            raise ValueError("Rankings must agree on valid rating counts")
+
         self.naive_ranking = naive_ranking.copy()
         self.bayesian_ranking = bayesian_ranking.copy()
 
@@ -130,6 +141,19 @@ class RankingEvaluator:
 
         if not smoothing_strengths:
             raise ValueError("Provide at least one smoothing strength")
+
+        expected_naive_ranking = recipe_ranker.rank_by_mean_rating()
+
+        comparison_columns = [
+            "recipe_id",
+            "valid_rating_count",
+            "ranking_score",
+        ]
+
+        if not expected_naive_ranking[comparison_columns].equals(
+            self.naive_ranking[comparison_columns].reset_index(drop=True)
+        ):
+            raise ValueError("recipe_ranker must match the evaluator's naive ranking")
 
         baseline_top_ids = set(self.naive_ranking.head(top_k)["recipe_id"])
 

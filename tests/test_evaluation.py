@@ -150,3 +150,47 @@ def test_empty_smoothing_strengths_are_rejected(
             smoothing_strengths=[],
             top_k=1,
         )
+
+
+def test_inconsistent_rating_counts_are_rejected(
+    sample_evaluator: RankingEvaluator,
+) -> None:
+    invalid_ranking = sample_evaluator.bayesian_ranking.copy()
+    invalid_ranking.loc[0, "valid_rating_count"] = 999
+
+    with pytest.raises(ValueError, match="rating counts"):
+        RankingEvaluator(
+            sample_evaluator.naive_ranking,
+            invalid_ranking,
+        )
+
+
+@pytest.mark.parametrize(
+    "column,replacement",
+    [
+        ("recipe_id", 999),
+        ("valid_rating_count", 2),
+        ("mean_valid_rating", 4.5),
+    ],
+)
+def test_smoothing_sensitivity_rejects_mismatched_ranker(
+    sample_ranker: RecipeRanker,
+    column: str,
+    replacement: float,
+) -> None:
+    evaluator = RankingEvaluator(
+        sample_ranker.rank_by_mean_rating(),
+        sample_ranker.rank_by_bayesian_score(10),
+    )
+
+    modified_summary = sample_ranker.recipe_rating_summary.copy()
+    modified_summary.loc[0, column] = replacement
+
+    mismatched_ranker = RecipeRanker(modified_summary)
+
+    with pytest.raises(ValueError, match="must match"):
+        evaluator.evaluate_smoothing_sensitivity(
+            recipe_ranker=mismatched_ranker,
+            smoothing_strengths=[10],
+            top_k=1,
+        )
