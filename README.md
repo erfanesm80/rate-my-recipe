@@ -40,6 +40,7 @@ rate-my-recipe/
 │   ├── ranking.py
 │   └── evaluation.py
 └── tests/
+    ├── conftest.py
     ├── test_data_preparation.py
     ├── test_ranking.py
     └── test_evaluation.py
