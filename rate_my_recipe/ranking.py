@@ -80,7 +80,11 @@ class RecipeRanker:
         smoothing_strength: float = 10.0,
     ) -> pd.DataFrame:
         """Return recipes ranked using the supplied smoothing strength."""
-        if not np.isfinite(smoothing_strength) or smoothing_strength <= 0:
+        if (
+            isinstance(smoothing_strength, (bool, np.bool_))
+            or not np.isfinite(smoothing_strength)
+            or smoothing_strength <= 0
+        ):
             raise ValueError("Smoothing strength must be a positive finite number")
 
         global_mean_rating = self.calculate_global_mean_rating()

@@ -87,11 +87,11 @@ def test_ranking_ties_use_count_then_recipe_id() -> None:
 
 @pytest.mark.parametrize(
     "smoothing_strength",
-    [0, -1, float("nan"), float("inf")],
+    [0, -1, float("nan"), float("inf"), True],
 )
 def test_invalid_smoothing_strength(
     sample_ranker: RecipeRanker,
-    smoothing_strength: float,
+    smoothing_strength: float | bool,
 ) -> None:
     with pytest.raises(ValueError, match="Smoothing strength"):
         sample_ranker.rank_by_bayesian_score(smoothing_strength)
