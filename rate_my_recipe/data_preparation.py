@@ -1,5 +1,6 @@
 import ast
 
+import numpy as np
 import pandas as pd
 
 
@@ -64,9 +65,11 @@ class RecipeDataPreparer:
         if unknown_recipe_ids.any():
             raise ValueError("Interactions reference unknown recipe IDs")
 
-        invalid_ratings = self.interactions["rating"].isna() | ~self.interactions[
-            "rating"
-        ].isin(range(6))
+        ratings = self.interactions["rating"]
+
+        boolean_ratings = ratings.map(lambda value: isinstance(value, (bool, np.bool_)))
+
+        invalid_ratings = ratings.isna() | boolean_ratings | ~ratings.isin(range(6))
 
         if invalid_ratings.any():
             raise ValueError("Ratings must be integers from 0 to 5")

@@ -152,3 +152,17 @@ def test_invalid_tag_data_is_rejected(
 
     with pytest.raises(expected_exception, match="Recipe tags"):
         sample_preparer.build_recipe_tag_index()
+
+
+@pytest.mark.parametrize("boolean_rating", [True, False])
+def test_boolean_ratings_are_rejected(
+    sample_preparer: RecipeDataPreparer,
+    boolean_rating: bool,
+) -> None:
+    sample_preparer.interactions["rating"] = sample_preparer.interactions[
+        "rating"
+    ].astype(object)
+    sample_preparer.interactions.loc[0, "rating"] = boolean_rating
+
+    with pytest.raises(ValueError, match="Ratings"):
+        sample_preparer.build_recipe_rating_summary()
