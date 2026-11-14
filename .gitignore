@@ -9,3 +9,8 @@ data/raw/
 data/processed/
 
 .streamlit/secrets.toml
+
+.ipynb_checkpoints/
+.ruff_cache/
+.coverage
+htmlcov/
