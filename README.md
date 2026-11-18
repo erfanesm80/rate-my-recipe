@@ -20,6 +20,7 @@ The project explores the dataset, prepares validated recipe-level statistics, co
 ```text
 rate-my-recipe/
 ├── README.md
+├── RESULTS.md
 ├── requirements.txt
 ├── .gitignore
 ├── notebooks/
@@ -189,14 +190,9 @@ ruff check rate_my_recipe tests
 
 The tests use small synthetic datasets, so **the original Food.com CSVs are not needed to run them**. They cover input validation, zero and invalid ratings, aggregation, tag parsing, ranking formulas, deterministic ties, evaluation calculations, and error conditions. Shared test fixtures are defined in `tests/conftest.py`.
 
-## Limitations
+## Results and Limitations
 
-- Ratings can be subjective, sparse, and affected by selection bias.
-- Zero ratings are interpreted as missing star feedback, not negative evaluations.
-- The smoothing strength is not optimized against held-out or future ratings.
-- The methods measure ranking behavior; they do not establish recommendation accuracy or objective recipe quality.
-- Recipe tags, preparation times, and ingredient counts are not used to create separate category rankings.
-- Some recipe metadata, especially preparation times, contain missing or unusual values.
+See **[RESULTS.md](RESULTS.md)** for the key numerical findings, their interpretation, and the limitations of this analysis. The notebooks contain the complete calculations and visualizations.
 
 ## References
 
