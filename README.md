@@ -21,6 +21,7 @@ The project explores the dataset, prepares validated recipe-level statistics, co
 rate-my-recipe/
 ├── README.md
 ├── RESULTS.md
+├── app.py
 ├── requirements.txt
 ├── .gitignore
 ├── notebooks/
@@ -36,7 +37,8 @@ rate-my-recipe/
 │   ├── conftest.py
 │   ├── test_data_preparation.py
 │   ├── test_ranking.py
-│   └── test_evaluation.py
+│   ├── test_evaluation.py
+│   └── test_app.py
 └── data/                         # Local only; ignored by Git
     ├── raw/
     │   ├── RAW_recipes.csv
@@ -56,7 +58,7 @@ The `data/` directory and its CSV files are created locally and are **not tracke
 | `ranking.py` | Compute naive and Bayesian-style scores and deterministic rankings |
 | `evaluation.py` | Compare top-k lists, rank movements, rating counts, and smoothing sensitivity |
 
-The notebooks import these modules instead of duplicating the data-preparation or ranking algorithms.
+The notebooks and Streamlit app import these modules instead of duplicating the data-preparation or ranking algorithms.
 
 ## Dataset
 
@@ -109,6 +111,20 @@ Open and run the notebooks in the following order. Use **Restart Kernel and Run 
 **Dependency:** Notebook 1 must be run first to generate the processed rating summary. Notebooks 2 and 3 can then be executed **independently**; the presentation does not require Notebook 2 to have run.
 
 Saved notebook outputs can be viewed on GitHub, but reproducing the results locally requires the original CSVs.
+
+## Streamlit Dashboard
+
+After running Notebook 1 to generate `data/processed/recipe_rating_summary.csv`, launch the interactive dashboard from the repository root:
+
+```bash
+streamlit run app.py
+```
+
+The dashboard uses the same ranking and evaluation modules as the notebooks. You can choose a ranking method, change the smoothing strength $m$, search recipe names, filter by minimum valid ratings, and export the displayed leaderboard as CSV. The **Compare methods** tab shows top-k overlap and rating-count evidence.
+
+**Interpretation:** Scores and ranks are computed globally using all valid ratings. Search and minimum-rating filters only change which rows are displayed; they do not recalculate global ranks. Comparisons always use the unfiltered leaderboards.
+
+The dashboard reads the locally generated CSV and does not download or include the raw Food.com data.
 
 ## Methodology
 
@@ -185,10 +201,10 @@ python -m pytest tests/ -v
 Check the Python modules and tests with Ruff:
 
 ```bash
-ruff check rate_my_recipe tests
+ruff check rate_my_recipe tests app.py
 ```
 
-The tests use small synthetic datasets, so **the original Food.com CSVs are not needed to run them**. They cover input validation, zero and invalid ratings, aggregation, tag parsing, ranking formulas, deterministic ties, evaluation calculations, and error conditions. Shared test fixtures are defined in `tests/conftest.py`.
+The tests use small synthetic datasets, so **the original Food.com CSVs are not needed to run them**. They cover input validation, zero and invalid ratings, aggregation, tag parsing, ranking formulas, deterministic ties, evaluation calculations, app filtering, and error conditions. Shared test fixtures are defined in `tests/conftest.py`.
 
 ## Results and Limitations
 
